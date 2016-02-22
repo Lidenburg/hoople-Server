@@ -17,6 +17,7 @@
 #define CHAT_NORMAL_MESSAGE 0xFF
 #define CHAT_USER_CONNECTED 0xFE
 #define CHAT_FILE_TRANSFER 0xFD
+#define CHAT_ERROR 0x00
 
 struct ChatMessage{
   int MESSAGE_TYPE;
@@ -131,4 +132,24 @@ int setupNetworking(int port){
     error("Failed to listen");
 
   return sockfd;
+}
+
+void sendNormalMessage(SSL *ssl, char *in_data){
+  struct ChatMessage message;
+
+  message.MESSAGE_TYPE = CHAT_NORMAL_MESSAGE;
+  strncpy(message.MESSAGE, in_data, MAX_MESG_LEN);
+
+  SSL_write(ssl, &message, strlen(message.MESSAGE) + sizeof(int));
+  printf("message written: %s\n", message.MESSAGE);
+}
+
+void sendErrorMessage(SSL *ssl, char *in_data){
+  struct ChatMessage message;
+
+  message.MESSAGE_TYPE = CHAT_ERROR;
+
+  strncpy(message.MESSAGE, in_data, MAX_MESG_LEN);
+
+  SSL_write(ssl, &message, strlen(message.MESSAGE) + sizeof(int));
 }

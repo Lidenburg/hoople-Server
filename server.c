@@ -361,14 +361,14 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
   // getUsername returns the username that the message is to be delivered to in the variable receiver
   if(0 == (getUsername(received_chat_message.MESSAGE, receiver))){
     printf("getUsername failed\n");
-    SSL_write(ssl, "Invalid format\n", 15);
+    sendErrorMessage(ssl, "Invalid format\n");
     continue;
   }
 
   // Check if there's an SSL object currently assigned to that username
   if(NULL == (receiver_ssl = getSSLFromUsername(receiver))){
     printf("getSSLFromUsername failed\n");
-    SSL_write(ssl, "No such user\n", 13);
+    sendErrorMessage(ssl, "No such user\n");
     continue;
   }
 
@@ -446,7 +446,7 @@ int checkSerial(char *serial, char *username){
     error("Failed opening users.txt");
 
   while(2 == (result = fscanf(users_file, "%s : %s\n", file_serial, username))){
-    if((strcmp(serial, file_serial)) == 0){
+    if(!strcmp(serial, file_serial)){
       //printf("%s\n is the same as\n%s\n", serial, file_serial);
       fclose(users_file);
       free(serial);
