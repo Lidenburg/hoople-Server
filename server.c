@@ -260,8 +260,6 @@ char * parseCert(SSL *ssl){
 }
 
 void * acceptSSL(void* arg){   // Read data from socket in seperate function to make threading easier
-  // TODO: change mesg from char * to ChatMessage
-  //char mesg[TOTAL_MAX_MESG_LEN + 1], new_mesg[TOTAL_MAX_MESG_LEN + 1];
   struct ChatMessage received_chat_message, proxied_chat_message;
   int fd, length, new_sockfd, TID, written;
   char *username, *receiver = malloc(MAX_USERNAME_LEN + 1);
@@ -279,6 +277,7 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
 
   ctx = InitCTX(ctx);
   loadCerts(ctx);
+  // NOTE: this malloc is probably useless
   ssl = malloc(sizeof(SSL));
 
   // Setup ssl stuff
@@ -332,29 +331,29 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
   //  NOTE: remember how you fucked up here
   while((length = SSL_read(ssl, &received_chat_message, sizeof(struct ChatMessage))) > 0){
 
-  received_chat_message.MESSAGE[length] = 0; // <paranoid>
+    received_chat_message.MESSAGE[length] = 0; // <paranoid>
 
-  printf("Read %d bytes\n", length);
+    printf("Read %d bytes\n", length);
 
-  printf("[DEBUG]type = %x\n", received_chat_message.MESSAGE_TYPE);
+    printf("[DEBUG]type = %x\n", received_chat_message.MESSAGE_TYPE);
 
-  switch(received_chat_message.MESSAGE_TYPE){
-    case CHAT_NORMAL_MESSAGE:
-      printf("message: \"%s\"(%d)\n", received_chat_message.MESSAGE, (int)strlen(received_chat_message.MESSAGE));
-      proxied_chat_message.MESSAGE_TYPE = CHAT_NORMAL_MESSAGE;
-      break;
-    case CHAT_FILE_TRANSFER:
-      printf("[!] Oops! The message type of this message is not yet implemented! Discarding message\n");
-      // proxied_chat_message.MESSAGE_TYPE = CHAT_FILE_TRANSFER;
-      continue;
-    case CHAT_USER_CONNECTED:
-      printf("[!] Oops! The message type of this message is not yet implemented! Discarding message\n");
-      // proxied_chat_message.MESSAGE_TYPE = CHAT_USER_CONNECTED;
-      continue;
-    default:
-      printf("[!] This message contained an invalid message type! Discarding message\n");
-      continue;
-  }
+    switch(received_chat_message.MESSAGE_TYPE){
+      case CHAT_NORMAL_MESSAGE:
+        printf("message: \"%s\"(%d)\n", received_chat_message.MESSAGE, (int)strlen(received_chat_message.MESSAGE));
+        proxied_chat_message.MESSAGE_TYPE = CHAT_NORMAL_MESSAGE;
+        break;
+      case CHAT_FILE_TRANSFER:
+        printf("[!] Oops! The message type of this message is not yet implemented! Discarding message\n");
+        // proxied_chat_message.MESSAGE_TYPE = CHAT_FILE_TRANSFER;
+        continue;
+      case CHAT_USER_CONNECTED:
+        printf("[!] Oops! The message type of this message is not yet implemented! Discarding message\n");
+        // proxied_chat_message.MESSAGE_TYPE = CHAT_USER_CONNECTED;
+        continue;
+      default:
+        printf("[!] This message contained an invalid message type! Discarding message\n");
+        continue;
+    }
 
 
   // Check that the message contains a correctly formatted username
@@ -388,10 +387,10 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
   if(0 >= (written = SSL_write(receiver_ssl, &proxied_chat_message, strlen(proxied_chat_message.MESSAGE) + sizeof(int))))
     printf("Error sending message to %s\n", receiver);    // Should probably let the user know if this fails
 
-    printf("Wrote %d bytes\n", written);
+  printf("Wrote %d bytes\n", written);
 
-    memset(received_chat_message.MESSAGE, 0x0, TOTAL_MAX_MESG_LEN);
-  }
+  memset(received_chat_message.MESSAGE, 0x0, TOTAL_MAX_MESG_LEN);
+} // End of main loop
 
   printf("%s disconnected\n", username);
 
