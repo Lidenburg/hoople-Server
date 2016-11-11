@@ -28,7 +28,7 @@ struct UserDetails{
   char *USERNAME;
   char *SERIAL;
   SSL *SSL;
-  int CONNECTED;
+  char CONNECTED;
 };
 
 struct threadInfo{

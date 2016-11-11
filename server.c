@@ -51,8 +51,10 @@ int main(int argc, char **argv){
     count = find_first_count();
     printf("\nCount is: %d\n", count);
 
-    if((new_sockfd = accept(sockfd, (struct sockaddr *)&client_sockaddr, &client_length)) < 0)  // Stops execution until new connection is initiated
-      error("Failed accepting new connection");                        // then returns fd into new_sockfd and sockaddr struct into client_sockaddr
+	// Stops execution until new connection is initiated
+	// then returns fd into new_sockfd and sockaddr struct into client_sockaddr
+    if((new_sockfd = accept(sockfd, (struct sockaddr *)&client_sockaddr, &client_length)) < 0)  
+      error("Failed accepting new connection");
 
     printf("Accepted connection\t count = %d\n", count);
 
