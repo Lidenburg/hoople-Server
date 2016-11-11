@@ -19,11 +19,13 @@
 #define CHAT_FILE_TRANSFER 0xFD
 #define CHAT_ERROR 0x00
 
+// This is what is sent
 struct ChatMessage{
-  int MESSAGE_TYPE;
+  char MESSAGE_TYPE;
   char MESSAGE[TOTAL_MAX_MESG_LEN + 1];  // +1 for the null byte
 };
 
+// This is only used locally on the machine, it's never sent
 struct UserDetails{
   char *USERNAME;
   char *SERIAL;
