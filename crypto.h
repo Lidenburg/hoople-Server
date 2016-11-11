@@ -16,6 +16,7 @@ void loadCerts(SSL_CTX *);
 extern pthread_mutex_t mutex;
 extern struct UserDetails userdetails[MAX_USERS];
 
+// This is horrible
 char * parseCert(SSL *ssl){
   X509 *client_cert;
   char *buf;
@@ -57,6 +58,7 @@ char * parseCert(SSL *ssl){
   BN_free(bn);
   OPENSSL_free(buf);
 
+  printf("serial: %s\n", serial_number);
   return serial_number;
 }
 
@@ -166,6 +168,7 @@ SSL * getSSLFromUsername(char username[MAX_USERNAME_LEN + 1]){
 
   pthread_mutex_lock(&mutex);
   for(i = 0; i < MAX_USERS; i++){
+	// Check that it's not NULL
     if(!(local = userdetails[i].USERNAME))
       continue;
 
@@ -185,9 +188,12 @@ void loadCerts(SSL_CTX *ctx){
   if(!SSL_CTX_use_certificate_chain_file(ctx, "rootCA.pem"))
     ssl_error("Failed loading rootCA.pem");
 
-  if(!SSL_CTX_use_PrivateKey_file(ctx, "rootCA-priv.key", SSL_FILETYPE_PEM))
+  SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file("rootCA.pem"));
+
+  if(!SSL_CTX_use_PrivateKey_file(ctx, "rootCA.key", SSL_FILETYPE_PEM))
     ssl_error("Failed loading private key");
 
   if(!SSL_CTX_check_private_key(ctx) && printf("Private key does not match public certificate"))
     exit(1);
+  printf("Loaded all certs\n");
 }
