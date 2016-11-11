@@ -36,18 +36,6 @@ struct threadInfo{
   int sockfd;
 };
 
-/*
-  Ethernet header size  = 14 bytes
-  IPV4 header size = 20 bytes
-  TCP header minimum size = 20 bytes, max = 60 bytes
-
-  Ethernet standard MTU = 1500
-  theoretical optimal max message length = 1406 bytes
-  is for now only 500(+ null terminator)
-
-  NOTE: This does not take into consideration openSSL
-*/
-
 void usage(char **argv){
   printf("Usage: %s [PORT]\n", argv[0]);
   printf("\nPort:\t1024-65535\n");
@@ -56,53 +44,10 @@ void usage(char **argv){
   exit(1);
 }
 
-void ssl_error(char *mesg){
-  printf("%s\n", mesg);
-  ERR_print_errors_fp(stderr);
-
-  exit(1);
-}
-
 void error(char *mesg){
   perror(mesg);
 
   exit(1);
-}
-
-SSL_CTX * InitCTX(SSL_CTX *ctx){
-  const SSL_METHOD *method;
-  long flags;
-
-  SSL_library_init();
-  SSL_load_error_strings();
-  OpenSSL_add_all_algorithms();
-  ERR_load_crypto_strings();
-
-  // Make sure SSLv2 or 3 is never used
-  method = SSLv23_method();
-  if((ctx = SSL_CTX_new(method)) == NULL)
-    ssl_error("Failed creating ctx method");
-
-  flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION;
-  SSL_CTX_set_options(ctx, flags);
-
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
-
-  return ctx;
-}
-
-void loadCerts(SSL_CTX *ctx){
-  if(!SSL_CTX_load_verify_locations(ctx, "rootCA.pem", NULL))
-    ssl_error("Failed load_verify_locations");
-
-  if(!SSL_CTX_use_certificate_chain_file(ctx, "rootCA.pem"))
-    ssl_error("Failed loading rootCA.pem");
-
-  if(!SSL_CTX_use_PrivateKey_file(ctx, "rootCA-priv.key", SSL_FILETYPE_PEM))
-    ssl_error("Failed loading private key");
-
-  if(!SSL_CTX_check_private_key(ctx) && printf("Private key does not match public certificate"))
-    exit(1);
 }
 
 int setupNetworking(int port){

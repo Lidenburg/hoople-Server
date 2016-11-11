@@ -9,23 +9,14 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include <openssl/ssl.h>
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-
 #include "server.h"
+#include "crypto.h"
 
 void * acceptSSL(void *);
-char * parseCert(SSL *);
 int checkSerial(char *, char *);
-char * setupEncryption();
-char * randString(int);
-int Encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key, unsigned char *IV, unsigned char *ciphertext);
 int find_first_count();
 int isUserOnline(char *);
-SSL * getSSLFromUsername(char *);
 int getUsername(char *, char *);
-
 
 pthread_mutex_t mutex;
 struct UserDetails userdetails[MAX_USERS];
@@ -83,7 +74,7 @@ int main(int argc, char **argv){
   if(close(sockfd) == -1)
     error("Failed closing socket in main");
 
-  printf("Reached end of main while(1) loop\n");
+  printf("[!] Reached end of main while(1) loop\n");
   pthread_exit(NULL);
   return 1;
 }
@@ -124,139 +115,6 @@ int find_first_count(){
   }
   pthread_mutex_unlock(&mutex);
   exit(1);
-}
-
-SSL * getSSLFromUsername(char username[MAX_USERNAME_LEN + 1]){
-  int i;
-  char* local;
-
-  pthread_mutex_lock(&mutex);
-  for(i = 0; i < MAX_USERS; i++){
-    if(!(local = userdetails[i].USERNAME))
-      continue;
-
-    if(!strcmp(username, local)){
-      pthread_mutex_unlock(&mutex);
-      return userdetails[i].SSL;
-    }
-  }
-  pthread_mutex_unlock(&mutex);
-  return NULL;
-}
-
-char * randString(int length){
-  unsigned char buf[length + 1];
-  static const char alpha[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  char *randomString;
-  int i;
-
-  printf("In randstring\n");
-
-  randomString = (char *)malloc(length + 1);
-
-  if((RAND_load_file("/dev/urandom", 32)) != 32){
-    printf("Not enough entropy in /dev/urandom, using RAND_poll instead\n");
-    RAND_poll();
-  }
-
-  if(!RAND_bytes(buf, length))
-    ssl_error("Error generating random bytes in setupEncryption");
-
-  for(i = 0; i < length; i++){
-    randomString[i] = alpha[buf[i] % (strlen(alpha) - 1)];
-    //printf("randomString [%d] = %c\n", i, randomString[i]);
-  }
-  randomString[length + 1] = 0x0;
-  printf("Random string: %s\n", randomString);
-  return randomString;
-}
-
-int Encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key, unsigned char *IV, unsigned char *ciphertext){
-  int len, ciphertext_len;
-  EVP_CIPHER_CTX *cipher_ctx;
-
-  // Create the context
-  if(!(cipher_ctx = EVP_CIPHER_CTX_new()))
-    ssl_error("Error creating new cipher context");
-
-  // Initialize cipher context to 256 bit aes-gcm
-  if(1 != EVP_EncryptInit_ex(cipher_ctx, EVP_aes_256_gcm(), NULL, NULL, NULL))
-    ssl_error("Error setting cipher context to aes_256_gcm");
-
-  // Set IV to 128 bits/16 bytes
-  if(1 != EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL))
-    ssl_error("Error setting cipher context IV to 16 bytes");
-
-  //IV = randString(16);    // Generate random IV
-  //key = randString(32);   // Generate random key
-
-  // Set IV and key of the context
-  if(1 != EVP_EncryptInit_ex(cipher_ctx, NULL, NULL, key, IV))
-    ssl_error("Failed seting cipher context's key and IV");
-
-  // Do the actual encryption
-    // AES has fixed cipher block size of 128 bits/16 bytes, so the longest possible
-    // ciphertext is strlen(message) + 15 (cipher block size - 1)
-  if(1 != EVP_EncryptUpdate(cipher_ctx, ciphertext, &len, plaintext, plaintext_len))
-    ssl_error("Error encrypting message");
-
-  ciphertext_len = len;
-
-  // Finalize encryption
-  if(1 != EVP_EncryptFinal_ex(cipher_ctx, ciphertext + len, &len))  // ciphertext + len assures that we don't overwrite any data but append it instead
-    ssl_error("Failed EncryptFinal_ex");
-
-  ciphertext_len += len;
-
-  printf("Encrypted string: \n");
-  BIO_dump_fp(stdout, (const char *)ciphertext, ciphertext_len);
-
-  EVP_CIPHER_CTX_free(cipher_ctx);
-  return ciphertext_len;
-}
-
-char * parseCert(SSL *ssl){
-  X509 *client_cert;
-  char *buf;
-  char *serial_number = NULL;
-  BIGNUM *bn;
-  ASN1_INTEGER *serial;
-
-  serial_number = (char *)malloc(1001);
-
-  if((client_cert = SSL_get_peer_certificate(ssl)) == NULL)
-    exit(1);       // This outcome should never be possible
-
-  client_cert = SSL_get_peer_certificate(ssl);
-
-  serial = X509_get_serialNumber(client_cert);
-  bn = ASN1_INTEGER_to_BN(serial, NULL);
-
-  // TODO: log these failures somewhere
-  if(!bn){
-    printf("Error converting ASN1INTEGER to BN\n");
-    exit(1);
-  }
-
-  buf = BN_bn2dec(bn);
-  if(!buf){
-    printf("Error converting BN to decimal string\n");
-    BN_free(bn);
-    exit(1);
-  }
-
-  if(strlen(buf) >= 1001){
-    printf("buffer too short (that's a REALLY long serial!)\n");
-    BN_free(bn);
-    OPENSSL_free(buf);
-    exit(1);
-  }
-
-  strncpy(serial_number, buf, 1001);
-  BN_free(bn);
-  OPENSSL_free(buf);
-
-  return serial_number;
 }
 
 void * acceptSSL(void* arg){   // Read data from socket in seperate function to make threading easier
@@ -328,7 +186,7 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
     **********************
   */
 
-  //  NOTE: remember how you fucked up here
+  // Loops as long as a message is successfully read
   while((length = SSL_read(ssl, &received_chat_message, sizeof(struct ChatMessage))) > 0){
 
     received_chat_message.MESSAGE[length] = 0; // <paranoid>
