@@ -119,9 +119,10 @@ int find_first_count(){
   exit(1);
 }
 
-void * acceptSSL(void* arg){   // Read data from socket in seperate function to make threading easier
+// Read data from socket in seperate function to make threading easier
+void * acceptSSL(void* arg){
   struct ChatMessage received_chat_message, proxied_chat_message;
-  int fd, length, new_sockfd, TID;
+  int fd, length, new_sockfd, TID, ret;
   char *username, *receiver = malloc(MAX_USERNAME_LEN + 1);
   SSL_CTX *ctx = NULL;
   SSL *ssl, *receiver_ssl;
@@ -148,16 +149,41 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
     exit(1);
 
 
+  if((ret = SSL_accept(ssl)) <= 0){
+	if(ret == 0)
+		printf("failed handshake but controlled shutdown\n");
+
+  printf("[!] SSL_accept failed\n");
+  //printf("SSL_accept failed, someone probably tried to connect using SSLV2/3, did an nmap scan, or didn't supply a key/certificate\n");
+
+  ERR_print_errors_fp(stderr);
+
+  pthread_mutex_lock(&mutex);
+  memset(&userdetails[TID], 0x0, sizeof(struct UserDetails));
+  pthread_mutex_unlock(&mutex);
+
+  if((fd = SSL_get_fd(ssl)) < 0)
+    exit(1);
+
+  close(fd);
+
+  return NULL;
+  }
+
+
   // Check if the serial of the x509 cert is registered to a user
   username = malloc(MAX_USERNAME_LEN + 1);
-
+  printf("Before checkSerial\n");
   if(!checkSerial(parseCert(ssl), username) && printf("No user matched the given ID\n"))  // The username associated with the serial is returned in username
     goto end;
+
+  printf("Before isUserOnline\n");
 
   // Check if user is already connected
   if(isUserOnline(username) && printf("User is already connected, dropping connection\n"))
     goto end;
 
+  // User is now connected
   printf("%s connected\n", username);
 
   // Store these in mutex struct
@@ -177,7 +203,7 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
   // Loops as long as a message is successfully read
   while((length = SSL_read(ssl, &received_chat_message, sizeof(struct ChatMessage))) > 0){
 
-    received_chat_message.MESSAGE[length] = 0; // <paranoid>
+    //received_chat_message.MESSAGE[length] = 0; // <paranoid>
 
     printf("Read %d bytes\n", length);
 
@@ -208,39 +234,40 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
     printf("getUsername failed\n");
     sendErrorMessage(ssl, "Invalid format\n");
     continue;
-  }
+   }
 
-  // Check if there's an SSL object currently assigned to that username
-  if(NULL == (receiver_ssl = getSSLFromUsername(receiver))){
+   // Check if there's an SSL object currently assigned to that username
+   if(NULL == (receiver_ssl = getSSLFromUsername(receiver))){
     printf("getSSLFromUsername failed\n");
     sendErrorMessage(ssl, "No such user\n");
     continue;
-  }
+   }
 
   // Use pointer magic to only send the message part of the message. +1 for the ':'
 
-  printf("username = %s(%d)\n", username, (int)strlen(username));
-  printf("receiver = %s(%d)\n", receiver, (int)strlen(receiver));
-  printf("message = %s(%d)\n", received_chat_message.MESSAGE, (int)strlen(received_chat_message.MESSAGE));
+   printf("username = %s(%d)\n", username, (int)strlen(username));
+   printf("receiver = %s(%d)\n", receiver, (int)strlen(receiver));
+   printf("message = %s(%d)\n", received_chat_message.MESSAGE, (int)strlen(received_chat_message.MESSAGE));
 
-  snprintf(proxied_chat_message.MESSAGE, TOTAL_MAX_MESG_LEN, "%s:%s", username, received_chat_message.MESSAGE + strlen(receiver) + 1);
-  printf("[DEBUG]new message: \"%s\"\n", proxied_chat_message.MESSAGE);
+   snprintf(proxied_chat_message.MESSAGE, TOTAL_MAX_MESG_LEN, "%s:%s", username, received_chat_message.MESSAGE + strlen(receiver) + 1);
+   printf("[DEBUG]new message: \"%s\"\n", proxied_chat_message.MESSAGE);
 
 
-  // NOTE: write only the size of the actual ChatMessage object, and not the size of _A_ ChatMessage object
-  //if(0 >= (written = SSL_write(receiver_ssl, &proxied_chat_message, strlen(proxied_chat_message.MESSAGE) + sizeof(char))))
+    // NOTE: write only the size of the actual ChatMessage object, and not the size of _A_ ChatMessage object
+    //if(0 >= (written = SSL_write(receiver_ssl, &proxied_chat_message, strlen(proxied_chat_message.MESSAGE) + sizeof(char))))
     //printf("Error sending message to %s\n", receiver);    // Should probably let the user know if this fails
 
-  sendNormalMessage(receiver_ssl, proxied_chat_message.MESSAGE);
+    sendNormalMessage(receiver_ssl, proxied_chat_message.MESSAGE);
 
-//  printf("Wrote %d bytes\n", written);
+  //  printf("Wrote %d bytes\n", written);
 
-  memset(received_chat_message.MESSAGE, 0x0, TOTAL_MAX_MESG_LEN);
-} // End of main loop
+    memset(received_chat_message.MESSAGE, 0x0, TOTAL_MAX_MESG_LEN);
+  } // End of main loop
 
   printf("%s disconnected\n", username);
 
   end:
+  printf("At end\n");
   if((fd = SSL_get_fd(ssl)) < 0)    // The operation can fail if the underlying BIO is not of the correct type
     exit(1);               // This should never happen
 

@@ -17,6 +17,7 @@ extern pthread_mutex_t mutex;
 extern struct UserDetails userdetails[MAX_USERS];
 
 // This is horrible
+// Returns the serial number
 char * parseCert(SSL *ssl){
   X509 *client_cert;
   char *buf;
@@ -24,10 +25,14 @@ char * parseCert(SSL *ssl){
   BIGNUM *bn;
   ASN1_INTEGER *serial;
 
+  printf("In parseCert\n");
+
   serial_number = (char *)malloc(1001);
 
-  if((client_cert = SSL_get_peer_certificate(ssl)) == NULL)
-    exit(1);       // This outcome should never be possible
+  // This outcome should never be possible, since the OpenSSL 
+  // flags set make sure that the client sends a certificate
+  if(NULL == (client_cert = SSL_get_peer_certificate(ssl)))
+    exit(1);
 
   client_cert = SSL_get_peer_certificate(ssl);
 
@@ -188,6 +193,7 @@ void loadCerts(SSL_CTX *ctx){
   if(!SSL_CTX_use_certificate_chain_file(ctx, "rootCA.pem"))
     ssl_error("Failed loading rootCA.pem");
 
+  // This isn't actually neccessary for self signed certificates
   SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file("rootCA.pem"));
 
   if(!SSL_CTX_use_PrivateKey_file(ctx, "rootCA.key", SSL_FILETYPE_PEM))
