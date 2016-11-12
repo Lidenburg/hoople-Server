@@ -99,7 +99,7 @@ int isUserOnline(char *arg){
       return 1; // Returns 1 if user is already connected
     }
   }
-  printf("No such user connected\n");
+  // printf("No such user connected\n");
   pthread_mutex_unlock(&mutex);
 
   return 0;
@@ -121,7 +121,7 @@ int find_first_count(){
 
 void * acceptSSL(void* arg){   // Read data from socket in seperate function to make threading easier
   struct ChatMessage received_chat_message, proxied_chat_message;
-  int fd, length, new_sockfd, TID, ret;
+  int fd, length, new_sockfd, TID;
   char *username, *receiver = malloc(MAX_USERNAME_LEN + 1);
   SSL_CTX *ctx = NULL;
   SSL *ssl, *receiver_ssl;
@@ -147,26 +147,6 @@ void * acceptSSL(void* arg){   // Read data from socket in seperate function to 
   if(!SSL_set_fd(ssl, new_sockfd) && printf("Error using ssl_set_fd on new_sockfd\n"))
     exit(1);
 
-  if((ret = SSL_accept(ssl)) <= 0){
-	if(ret == 0)
-		printf("failed handshake but controlled shutdown\n");
-
-    printf("[!] SSL_accept failed\n");
-	//printf("SSL_accept failed, someone probably tried to connect using SSLV2/3, did an nmap scan, or didn't supply a key/certificate\n");
-
-	ERR_print_errors_fp(stderr);
-
-    pthread_mutex_lock(&mutex);
-    memset(&userdetails[TID], 0x0, sizeof(struct UserDetails));
-    pthread_mutex_unlock(&mutex);
-
-    if((fd = SSL_get_fd(ssl)) < 0)
-      exit(1);
-
-    close(fd);
-
-    return NULL;
-  }
 
   // Check if the serial of the x509 cert is registered to a user
   username = malloc(MAX_USERNAME_LEN + 1);
